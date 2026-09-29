@@ -1,0 +1,194 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "virtualMachineSize": { "type": "string" },
+    "linimageid": { "type": "string" },
+    "publicIpAddressType": { "type": "string" },
+    "lindiskSizeGB": { "type": "string" },
+    "diskType": { "type": "string" },
+    "vmAdminUserName1": { "type": "string" },
+    "vmAdminPassword1": { "type": "securestring" },
+    "AzureUserName": { "type": "string" },
+    "AzurePassword": { "type": "securestring" },
+    "ODLID": { "type": "string" },
+    "DeploymentID": { "type": "string" },
+    "bootstrapScriptUri": {
+      "type": "string",
+      "defaultValue": "https://raw.githubusercontent.com/<ORG>/<REPO>/main/lab-bootstrap-ariel.sh"
+    }
+  },
+  "variables": {
+    "AzureSubscriptionID": "[subscription().subscriptionId]",
+    "AzureTenantID": "[subscription().tenantId]",
+    "virtualNetworkName": "[concat('labvm-vNet-', parameters('DeploymentID'))]",
+    "linvirtualMachineName": "[concat('Ubuntu-', parameters('DeploymentID'))]",
+    "networkInterfaceName1": "[concat(variables('linvirtualMachineName'), '-nic')]",
+    "networkSecurityGroupName1": "[concat(variables('linvirtualMachineName'), '-nsg')]",
+    "publicIpAddressName1": "[concat(variables('linvirtualMachineName'), '-pip')]",
+    "publicIpAddressDNSName1": "[concat('ubuntudns',parameters('DeploymentID'))]",
+    "osdiskname1": "[concat('Ubuntu-OSDisk-', parameters('DeploymentID'))]",
+    "subnetName": "default",
+    "location": "[resourceGroup().location]",
+    "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets/',variables('virtualNetworkName'), variables('subnetName'))]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2016-09-01",
+      "name": "pid-e843308b-3ce2-42a2-b743-2f21b36a5e68",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": []
+        }
+      },
+      "type": "Microsoft.Resources/deployments"
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "name": "[variables('virtualNetworkName')]",
+      "apiVersion": "2015-06-15",
+      "location": "[variables('location')]",
+      "properties": {
+        "addressSpace": { "addressPrefixes": [ "10.0.0.0/16" ] },
+        "subnets": [
+          { "name": "[variables('subnetName')]", "properties": { "addressPrefix": "10.0.0.0/24" } }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('networkSecurityGroupName1')]",
+      "apiVersion": "2015-06-15",
+      "location": "[variables('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "default-allow-rdp",
+            "properties": {
+              "description": "Allow RDP", "protocol": "Tcp", "sourcePortRange": "*",
+              "destinationPortRange": "3389", "sourceAddressPrefix": "*", "destinationAddressPrefix": "*",
+              "access": "Allow", "priority": 1000, "direction": "Inbound"
+            }
+          },
+          {
+            "name": "default-allow-https",
+            "properties": {
+              "description": "Allow HTTPS", "protocol": "Tcp", "sourcePortRange": "*",
+              "destinationPortRange": "443", "sourceAddressPrefix": "*", "destinationAddressPrefix": "*",
+              "access": "Allow", "priority": 2000, "direction": "Inbound"
+            }
+          },
+          {
+            "name": "default-allow-ssh",
+            "properties": {
+              "description": "Allow SSH", "protocol": "Tcp", "sourcePortRange": "*",
+              "destinationPortRange": "22", "sourceAddressPrefix": "*", "destinationAddressPrefix": "*",
+              "access": "Allow", "priority": 3000, "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "name": "[variables('publicIpAddressName1')]",
+      "apiVersion": "2018-01-01",
+      "location": "[variables('location')]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "dnsSettings": { "domainNameLabel": "[variables('publicIpAddressDNSName1')]" }
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[variables('networkInterfaceName1')]",
+      "apiVersion": "2015-06-15",
+      "location": "[variables('location')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "linvm-pip",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": { "id": "[variables('subnetRef')]" },
+              "publicIPAddress": {
+                "id": "[resourceId(resourceGroup().name,'Microsoft.Network/publicIpAddresses', variables('publicIpAddressName1'))]"
+              }
+            }
+          }
+        ],
+        "networkSecurityGroup": {
+          "id": "[resourceId(resourceGroup().name, 'Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName1'))]"
+        }
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
+        "[concat('Microsoft.Network/publicIpAddresses/', variables('publicIpAddressName1'))]",
+        "[concat('Microsoft.Network/networkSecurityGroups/', variables('networkSecurityGroupName1'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "name": "[variables('linvirtualMachineName')]",
+      "apiVersion": "2018-06-01",
+      "location": "[variables('location')]",
+      "plan": {
+        "name": "ubuntu-server-26-04-lts-gen2",
+        "publisher": "cloudvoult",
+        "product": "ubuntu-server-26-04-lts-gen2"
+      },
+      "tags": {},
+      "properties": {
+        "hardwareProfile": { "vmSize": "[parameters('virtualMachineSize')]" },
+        "networkProfile": {
+          "networkInterfaces": [
+            { "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName1'))]" }
+          ]
+        },
+        "storageProfile": {
+          "osDisk": {
+            "createOption": "FromImage",
+            "name": "[variables('osdiskname1')]",
+            "caching": "ReadWrite",
+            "managedDisk": { "storageAccountType": "[parameters('diskType')]" },
+            "diskSizeGB": "[parameters('lindiskSizeGB')]"
+          },
+          "imageReference": { "id": "[parameters('linimageid')]" }
+        }
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('networkInterfaceName1'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(variables('linvirtualMachineName'), '/lab-bootstrap')]",
+      "apiVersion": "2021-11-01",
+      "location": "[variables('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', variables('linvirtualMachineName'))]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Azure.Extensions",
+        "type": "CustomScript",
+        "typeHandlerVersion": "2.1",
+        "autoUpgradeMinorVersion": true,
+        "protectedSettings": {
+          "fileUris": [ "[parameters('bootstrapScriptUri')]" ],
+          "commandToExecute": "bash lab-bootstrap-ariel.sh"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "Ubuntu DNS Name": {
+      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses',variables('publicIpAddressName1'))).dnsSettings.fqdn]",
+      "type": "string"
+    },
+    "Ubuntu Username": { "type": "string", "value": "[parameters('vmAdminUserName1')]" },
+    "Ubuntu Password": { "type": "string", "value": "[parameters('vmAdminPassword1')]" }
+  }
+}
