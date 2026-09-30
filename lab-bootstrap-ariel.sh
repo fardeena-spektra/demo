@@ -84,9 +84,20 @@ xq -c xsettings -p /Xft/Antialias -n -t int    -s 1
 xq -c xsettings -p /Xft/Hinting   -n -t int    -s 1
 xq -c xsettings -p /Xft/HintStyle -n -t string -s hintfull
 xq -c xsettings -p /Xft/RGBA      -n -t string -s none
-xq -c xsettings -p /Xft/DPI       -n -t int    -s 96
+xq -c xsettings -p /Xft/DPI       -n -t int    -s 144   # matches 67% browser zoom (DPI = 96 / zoom)
 xq -c xsettings -p /Gdk/WindowScalingFactor -n -t int -s 1
 xq -c xfwm4 -p /general/use_compositing -n -t bool -s false
+# Layout for 67% zoom: desktop icons + label font, top panel height
+xq -c xfce4-desktop -p /desktop-icons/icon-size            -n -t uint   -s 64
+xq -c xfce4-desktop -p /desktop-icons/use-custom-font-size -n -t bool   -s true
+xq -c xfce4-desktop -p /desktop-icons/font-size            -n -t double -s 9
+TOP=""
+for p in $(xq -c xfce4-panel -p /panels | grep -E '^[0-9]+$'); do
+  for id in $(xq -c xfce4-panel -p /panels/panel-$p/plugin-ids | grep -E '^[0-9]+$'); do
+    [[ $(xq -c xfce4-panel -p /plugins/plugin-$id) == "clock" ]] && TOP=$p
+  done
+done
+xq -c xfce4-panel -p /panels/panel-${TOP:-1}/size -n -t uint -s 36
 # Hebrew - XFCE keyboard
 xq -c keyboard-layout -p /Default/XkbDisable       -n -t bool   -s false
 xq -c keyboard-layout -p /Default/XkbLayout        -n -t string -s "us,il"
@@ -139,5 +150,7 @@ fc-list :lang=he family | grep -q 'CLM' && log "PASS Hebrew fonts" || log "FAIL 
 grep -q 'us,il' "$KB" && log "PASS xrdp map us,il"
 echo "  IBus ($LABUSER): $(U gsettings get org.freedesktop.ibus.general preload-engines)"
 U xfconf-query -c xsettings -l -v 2>/dev/null | grep -E 'Xft/(HintStyle|Antialias|DPI)' | sed 's/^/  /'
+echo "  Desktop icons: $(U xfconf-query -c xfce4-desktop -p /desktop-icons/icon-size 2>/dev/null) | label font: $(U xfconf-query -c xfce4-desktop -p /desktop-icons/font-size 2>/dev/null)"
+echo "  Panel sizes  : $(U bash -c 'for p in $(xfconf-query -c xfce4-panel -p /panels 2>/dev/null | grep -E "^[0-9]+$"); do echo -n "panel-$p=$(xfconf-query -c xfce4-panel -p /panels/panel-$p/size 2>/dev/null) "; done')"
 log "BOOTSTRAP COMPLETE"
 exit 0
