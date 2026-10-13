@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "virtualMachineSize": {
+      "value": "Standard_D4s_v4"
+    },
+    "linimageid": {
+      "value": "/subscriptions/0dfa1615-34c5-4943-bce9-126083351e54/resourceGroups/cloudlabs-mgmt/providers/Microsoft.Compute/galleries/presalesimagegallery/images/ariel-ubuntu-gui/versions/0.0.1"
+    },
+    "lindiskSizeGB": {
+      "value": "256"
+    },
+    "diskType": {
+      "value": "StandardSSD_LRS"
+    },
+    "publicIpAddressType": {
+      "value": "Dynamic"
+    },
+    "vmAdminUserName1": {
+      "value": "labuser"
+    },
+    "vmAdminPassword1": {
+      "value": "password.1!!"
+    },
+    "DeploymentID": {
+      "value": "GET-DEPLOYMENT-ID"
+    },
+    "AzureUserName": {
+      "value": "GET-AZUSER-UPN"
+    },
+    "AzurePassword": {
+      "value": "GET-AZUSER-PASSWORD"
+    },
+    "ODLID": {
+      "value": "GET-ODL-ID"
+    }
+  }
+}
