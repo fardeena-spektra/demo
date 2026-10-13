@@ -12,7 +12,7 @@
       "value": "256"
     },
     "diskType": {
-      "value": "StandardSSD_LRS"
+      "value": "Premium_LRS"
     },
     "publicIpAddressType": {
       "value": "Dynamic"
