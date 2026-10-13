@@ -2,17 +2,39 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "virtualMachineSize": { "type": "string" },
-    "linimageid": { "type": "string" },
-    "publicIpAddressType": { "type": "string" },
-    "lindiskSizeGB": { "type": "string" },
-    "diskType": { "type": "string" },
-    "vmAdminUserName1": { "type": "string" },
-    "vmAdminPassword1": { "type": "securestring" },
-    "AzureUserName": { "type": "string" },
-    "AzurePassword": { "type": "securestring" },
-    "ODLID": { "type": "string" },
-    "DeploymentID": { "type": "string" },
+    "virtualMachineSize": {
+      "type": "string"
+    },
+    "linimageid": {
+      "type": "string"
+    },
+    "publicIpAddressType": {
+      "type": "string"
+    },
+    "lindiskSizeGB": {
+      "type": "string"
+    },
+    "diskType": {
+      "type": "string"
+    },
+    "vmAdminUserName1": {
+      "type": "string"
+    },
+    "vmAdminPassword1": {
+      "type": "securestring"
+    },
+    "AzureUserName": {
+      "type": "string"
+    },
+    "AzurePassword": {
+      "type": "securestring"
+    },
+    "ODLID": {
+      "type": "string"
+    },
+    "DeploymentID": {
+      "type": "string"
+    },
     "bootstrapScriptUri": {
       "type": "string",
       "defaultValue": "https://raw.githubusercontent.com/fardeena-spektra/demo/refs/heads/main/lab-bootstrap-ariel.sh"
@@ -52,9 +74,18 @@
       "apiVersion": "2015-06-15",
       "location": "[variables('location')]",
       "properties": {
-        "addressSpace": { "addressPrefixes": [ "10.0.0.0/16" ] },
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.0.0.0/16"
+          ]
+        },
         "subnets": [
-          { "name": "[variables('subnetName')]", "properties": { "addressPrefix": "10.0.0.0/24" } }
+          {
+            "name": "[variables('subnetName')]",
+            "properties": {
+              "addressPrefix": "10.0.0.0/24"
+            }
+          }
         ]
       }
     },
@@ -68,25 +99,43 @@
           {
             "name": "default-allow-rdp",
             "properties": {
-              "description": "Allow RDP", "protocol": "Tcp", "sourcePortRange": "*",
-              "destinationPortRange": "3389", "sourceAddressPrefix": "*", "destinationAddressPrefix": "*",
-              "access": "Allow", "priority": 1000, "direction": "Inbound"
+              "description": "Allow RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 1000,
+              "direction": "Inbound"
             }
           },
           {
             "name": "default-allow-https",
             "properties": {
-              "description": "Allow HTTPS", "protocol": "Tcp", "sourcePortRange": "*",
-              "destinationPortRange": "443", "sourceAddressPrefix": "*", "destinationAddressPrefix": "*",
-              "access": "Allow", "priority": 2000, "direction": "Inbound"
+              "description": "Allow HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 2000,
+              "direction": "Inbound"
             }
           },
           {
             "name": "default-allow-ssh",
             "properties": {
-              "description": "Allow SSH", "protocol": "Tcp", "sourcePortRange": "*",
-              "destinationPortRange": "22", "sourceAddressPrefix": "*", "destinationAddressPrefix": "*",
-              "access": "Allow", "priority": 3000, "direction": "Inbound"
+              "description": "Allow SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 3000,
+              "direction": "Inbound"
             }
           }
         ]
@@ -99,13 +148,15 @@
       "location": "[variables('location')]",
       "properties": {
         "publicIPAllocationMethod": "Dynamic",
-        "dnsSettings": { "domainNameLabel": "[variables('publicIpAddressDNSName1')]" }
+        "dnsSettings": {
+          "domainNameLabel": "[variables('publicIpAddressDNSName1')]"
+        }
       }
     },
     {
       "type": "Microsoft.Network/networkInterfaces",
       "name": "[variables('networkInterfaceName1')]",
-      "apiVersion": "2015-06-15",
+      "apiVersion": "2023-05-01",
       "location": "[variables('location')]",
       "properties": {
         "ipConfigurations": [
@@ -113,7 +164,9 @@
             "name": "linvm-pip",
             "properties": {
               "privateIPAllocationMethod": "Dynamic",
-              "subnet": { "id": "[variables('subnetRef')]" },
+              "subnet": {
+                "id": "[variables('subnetRef')]"
+              },
               "publicIPAddress": {
                 "id": "[resourceId(resourceGroup().name,'Microsoft.Network/publicIpAddresses', variables('publicIpAddressName1'))]"
               }
@@ -122,7 +175,8 @@
         ],
         "networkSecurityGroup": {
           "id": "[resourceId(resourceGroup().name, 'Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName1'))]"
-        }
+        },
+        "enableAcceleratedNetworking": true
       },
       "dependsOn": [
         "[concat('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
@@ -142,10 +196,14 @@
       },
       "tags": {},
       "properties": {
-        "hardwareProfile": { "vmSize": "[parameters('virtualMachineSize')]" },
+        "hardwareProfile": {
+          "vmSize": "[parameters('virtualMachineSize')]"
+        },
         "networkProfile": {
           "networkInterfaces": [
-            { "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName1'))]" }
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName1'))]"
+            }
           ]
         },
         "storageProfile": {
@@ -153,10 +211,14 @@
             "createOption": "FromImage",
             "name": "[variables('osdiskname1')]",
             "caching": "ReadWrite",
-            "managedDisk": { "storageAccountType": "[parameters('diskType')]" },
+            "managedDisk": {
+              "storageAccountType": "[parameters('diskType')]"
+            },
             "diskSizeGB": "[parameters('lindiskSizeGB')]"
           },
-          "imageReference": { "id": "[parameters('linimageid')]" }
+          "imageReference": {
+            "id": "[parameters('linimageid')]"
+          }
         }
       },
       "dependsOn": [
@@ -177,7 +239,9 @@
         "typeHandlerVersion": "2.1",
         "autoUpgradeMinorVersion": true,
         "protectedSettings": {
-          "fileUris": [ "[parameters('bootstrapScriptUri')]" ],
+          "fileUris": [
+            "[parameters('bootstrapScriptUri')]"
+          ],
           "commandToExecute": "bash lab-bootstrap-ariel.sh"
         }
       }
@@ -188,7 +252,13 @@
       "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses',variables('publicIpAddressName1'))).dnsSettings.fqdn]",
       "type": "string"
     },
-    "Ubuntu Username": { "type": "string", "value": "[parameters('vmAdminUserName1')]" },
-    "Ubuntu Password": { "type": "string", "value": "[parameters('vmAdminPassword1')]" }
+    "Ubuntu Username": {
+      "type": "string",
+      "value": "[parameters('vmAdminUserName1')]"
+    },
+    "Ubuntu Password": {
+      "type": "string",
+      "value": "[parameters('vmAdminPassword1')]"
+    }
   }
 }
