@@ -37,7 +37,7 @@
     },
     "bootstrapScriptUri": {
       "type": "string",
-      "defaultValue": "https://raw.githubusercontent.com/fardeena-spektra/demo/refs/heads/main/lab-bootstrap-ariel.sh"
+      "defaultValue": "https://raw.githubusercontent.com/fardeena-spektra/demo/refs/heads/main/Demo/lab-bootstrap-ariel.sh"
     }
   },
   "variables": {
