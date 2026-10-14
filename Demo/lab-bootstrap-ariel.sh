@@ -2,7 +2,7 @@
 # =====================================================================
 # lab-bootstrap-ariel.sh  -  CloudLabs "Ariel" Ubuntu GUI (XFCE + xrdp)
 # Runs via Azure Custom Script Extension as root, before any user login.
-#  (1) Blur-free text           (2) Hebrew language + keyboard (IBus)
+#  (1) Blur-free text           (2) Hebrew language + keyboard (IBus) + Hebrew HOST keyboard (patched xrdp)
 #  (3) Background updates off   (4) Firefox snap -> deb (faster)
 #  (5) Text size: default DPI 144, set on FIRST login only (student can change it)
 #  (6) Desktop shortcuts: MATLAB + Firefox
@@ -101,6 +101,109 @@ EOF
 dconf update && log "IBus default: English + Hebrew"
 
 # ---------------------------------------------------------------------
+step "5b. Hebrew from a HEBREW host keyboard (Guacamole sends Hebrew as Unicode)"
+# (1) patched xrdp: Unicode keys sent as press+release (stock 0.10.1 leaves keys held)
+# Uses a prebuilt package if one is on GitHub (fast); otherwise builds it here (~3-4 min). No manual step needed.
+XRDP_DEB_URL="${XRDP_DEB_URL:-https://raw.githubusercontent.com/fardeena-spektra/demo/refs/heads/main/Demo/xrdp-lab-hebrew_amd64.deb}"
+build_patched_xrdp() {   # builds Ubuntu's own xrdp source + lab patch -> /tmp/xrdp-lab.deb
+  local B=/opt/xrdp-lab; rm -rf $B/src; mkdir -p $B/src
+  if [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]; then sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+  else grep -q '^deb-src' /etc/apt/sources.list || sed -n 's/^deb /deb-src /p' /etc/apt/sources.list >> /etc/apt/sources.list; fi
+  $APT update >/dev/null 2>&1 || return 1
+  $APT install --no-install-recommends dpkg-dev devscripts fakeroot >/dev/null 2>&1 || return 1
+  $APT build-dep xrdp >/dev/null 2>&1 || return 1
+  (cd $B/src && apt-get source -q xrdp >/dev/null 2>&1) || return 1
+  cd $B/src/xrdp-*/ || return 1
+  python3 - xrdp/xrdp_wm.c <<'PY' || return 1
+import sys
+f=sys.argv[1]; s=open(f).read()
+old="static int\nxrdp_wm_key_unicode(struct xrdp_wm *self, int device_flags, char32_t unicode)\n{"
+if old not in s: sys.exit("patch target not found")
+new=("static int\nxrdp_wm_key_unicode_impl(struct xrdp_wm *self, int device_flags, char32_t unicode);\n\n"
+"/* Lab patch: Guacamole sends Unicode key events press-only; emit press+release. */\n"
+"static int\nxrdp_wm_key_unicode(struct xrdp_wm *self, int device_flags, char32_t unicode)\n{\n"
+"    if (device_flags & KBD_FLAG_UP)\n    {\n        return 0;\n    }\n"
+"    xrdp_wm_key_unicode_impl(self, device_flags, unicode);\n"
+"    return xrdp_wm_key_unicode_impl(self, device_flags | KBD_FLAG_UP, unicode);\n}\n\n"
+"static int\nxrdp_wm_key_unicode_impl(struct xrdp_wm *self, int device_flags, char32_t unicode)\n{")
+open(f,'w').write(s.replace(old,new,1))
+PY
+  DEBFULLNAME="Lab Build" DEBEMAIL="lab@localhost" dch --local +lab "Unicode keys press+release (Guacamole Hebrew)" >/dev/null 2>&1
+  DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" dpkg-buildpackage -us -uc -b > $B/build.log 2>&1 || return 1
+  cp "$(ls $B/src/xrdp_*+lab*_amd64.deb | grep -v dbgsym | head -1)" /tmp/xrdp-lab.deb || return 1
+  cp /tmp/xrdp-lab.deb $B/xrdp-lab-hebrew_amd64.deb; cd /
+}
+if dpkg-query -W -f='${Version}' xrdp | grep -q '+lab'; then
+  log "Patched xrdp already installed"
+else
+  rm -f /tmp/xrdp-lab.deb
+  if curl -fsSL "$XRDP_DEB_URL" -o /tmp/xrdp-lab.deb 2>/dev/null && dpkg-deb -f /tmp/xrdp-lab.deb Version 2>/dev/null | grep -q '+lab'; then
+    log "Prebuilt patched xrdp downloaded from GitHub"
+  else
+    rm -f /tmp/xrdp-lab.deb; log "No prebuilt package on GitHub - building patched xrdp here (3-4 min)..."
+    T0=$(date +%s); build_patched_xrdp && log "Built in $(( $(date +%s)-T0 )) s (copy kept: /opt/xrdp-lab/xrdp-lab-hebrew_amd64.deb)" || { cd /; log "ERROR: build failed (see /opt/xrdp-lab/build.log)"; }
+  fi
+  if [[ -f /tmp/xrdp-lab.deb ]]; then
+    cp -a /etc/xrdp /tmp/etc-xrdp.$TS
+    dpkg -i --force-confold /tmp/xrdp-lab.deb >/dev/null && apt-mark hold xrdp >/dev/null \
+      && log "Patched xrdp installed: $(dpkg-query -W -f='${Version}' xrdp) (held)" || log "ERROR: patched xrdp install failed"
+    cp -a /tmp/etc-xrdp.$TS/. /etc/xrdp/
+  else
+    log "WARN: patched xrdp not available - Hebrew HOST keyboard will not work (rest of lab OK)"
+  fi
+fi
+# (2) xrdp keymap: Hebrew letters on RightAlt (so xrdp does not drop them)
+python3 - /etc/xrdp/km-00000409.ini <<'PY'
+import sys, re
+f = sys.argv[1]
+m = {26:0x5E7,27:0x5E8,28:0x5D0,29:0x5D8,30:0x5D5,31:0x5DF,32:0x5DD,33:0x5E4,38:0x5E9,39:0x5D3,40:0x5D2,41:0x5DB,42:0x5E2,
+     43:0x5D9,44:0x5D7,45:0x5DC,46:0x5DA,47:0x5E3,52:0x5D6,53:0x5E1,54:0x5D1,55:0x5D4,56:0x5E0,57:0x5DE,58:0x5E6,59:0x5EA,60:0x5E5}
+out, sec, n = [], None, 0
+for l in open(f).read().splitlines():
+    h = re.match(r'^\[(.+)\]\s*$', l)
+    if h: sec = h.group(1)
+    k = re.match(r'^Key(\d+)=', l)
+    if sec == 'altgr' and k and int(k.group(1)) in m:
+        cp = m[int(k.group(1))]; l = "Key%s=%d:%d" % (k.group(1), 0xce0 + cp - 0x5d0, cp); n += 1
+    out.append(l)
+open(f, 'w').write("\n".join(out) + "\n"); print("  xrdp keymap: %d/27 Hebrew letters on RightAlt" % n)
+PY
+# (3) XKB: RightAlt + key = Hebrew letter in the English and Hebrew layouts
+X=/usr/share/X11/xkb/symbols
+python3 - <<'PY'
+heb=[("AD03","05E7"),("AD04","05E8"),("AD05","05D0"),("AD06","05D8"),("AD07","05D5"),("AD08","05DF"),("AD09","05DD"),("AD10","05E4"),
+     ("AC01","05E9"),("AC02","05D3"),("AC03","05D2"),("AC04","05DB"),("AC05","05E2"),("AC06","05D9"),("AC07","05D7"),("AC08","05DC"),
+     ("AC09","05DA"),("AC10","05E3"),("AB01","05D6"),("AB02","05E1"),("AB03","05D1"),("AB04","05D4"),("AB05","05E0"),("AB06","05DE"),
+     ("AB07","05E6"),("AB08","05EA"),("AB09","05E5")]
+out=[]
+for name in ("us3","il3"):
+    out.append('partial alphanumeric_keys\nxkb_symbols "%s" {\n    include "level3(ralt_switch)"' % name)
+    for k,u in heb:
+        t = "FOUR_LEVEL" if (k in ("AC10","AB08","AB09") and name=="us3") else "FOUR_LEVEL_SEMIALPHABETIC"
+        out.append('    key <%s> { type[Group1]="%s", symbols[Group1]=[ NoSymbol, NoSymbol, U%s, U%s ] };' % (k,t,u,u))
+    out.append('};\n')
+open("/usr/share/X11/xkb/symbols/labheb","w").write("\n".join(out))
+PY
+for f in us il; do
+  grep -q labheb $X/$f && continue
+  cp -a $X/$f $X/$f.orig.$TS
+  python3 - $X/$f "labheb($([ $f = us ] && echo us3 || echo il3))" <<'PY'
+import sys,re
+f,inc=sys.argv[1],sys.argv[2]; s=open(f).read()
+m=re.search(r'default[^{]*?xkb_symbols\s+"[^"]+"\s*\{',s); end=s.index('\n};',m.end())
+open(f,'w').write(s[:end]+'\n    include "%s"'%inc+s[end:])
+PY
+done
+printf 'xkb_keymap { xkb_keycodes {include "xfree86+aliases(qwerty)"}; xkb_types {include "complete"}; xkb_compat {include "complete"}; xkb_symbols {include "pc+us+il:2"}; xkb_geometry {include "pc(pc104)"}; };\n' > /tmp/labheb-test.xkb
+if xkbcomp -w0 -xkb /tmp/labheb-test.xkb /tmp/labheb-test.out 2>/dev/null && grep -q U05E9 /tmp/labheb-test.out; then
+  log "XKB layout: RightAlt+key = Hebrew (compiles OK)"
+else
+  log "ERROR: XKB layout does not compile - restoring originals"
+  for f in us il; do O=$(ls $X/$f.orig.* 2>/dev/null | head -1); [[ -n $O ]] && cp -a "$O" $X/$f; done
+fi
+rm -f /var/lib/xkb/*.xkm
+
+# ---------------------------------------------------------------------
 step "6. Per-user settings script (fonts, effects, keyboard, IBus)"
 cat > /usr/local/bin/lab-user-settings.sh <<'EOF'
 #!/bin/bash
@@ -176,7 +279,9 @@ install -d -o "$LABUSER" -g "$LABUSER" "$DESK"
 M=$(readlink -f "$(command -v matlab 2>/dev/null)" 2>/dev/null)
 if [[ -x $M ]]; then
   MROOT=$(dirname "$(dirname "$M")")
-  MICON=$(find "$MROOT" -maxdepth 6 -type f -iname 'matlab*.png' 2>/dev/null | sort | tail -1)
+  # MATLAB's own logo as SVG (sharp at any size); fallback PNG
+  MICON=$(find "$MROOT/ui/icons" -iname 'matlabLogo.svg' 2>/dev/null | sort -V | tail -1)
+  [[ -z $MICON ]] && MICON=$(find "$MROOT/ui/icons" -iname 'matlabLogo*.png' 2>/dev/null | sort -V | tail -1)
   cat > /usr/share/applications/lab-matlab.desktop <<EOF
 [Desktop Entry]
 Type=Application
@@ -281,6 +386,9 @@ step "13. Verification"
 locale -a | grep -qi he_IL && log "PASS Hebrew locale"
 fc-list :lang=he family | grep -q 'CLM' && log "PASS Hebrew fonts" || log "FAIL Hebrew fonts"
 grep -q 'us,il' "$KB" && log "PASS xrdp map us,il"
+dpkg-query -W -f='${Version}' xrdp | grep -q '+lab' && log "PASS patched xrdp $(dpkg-query -W -f='${Version}' xrdp)" || log "FAIL patched xrdp not installed"
+[[ $(grep -cE '^Key[0-9]+=3[23][0-9]{2}:1[45][0-9]{2}$' /etc/xrdp/km-00000409.ini) -ge 27 ]] && log "PASS xrdp keymap Hebrew (27)" || log "FAIL xrdp keymap Hebrew"
+grep -q 'labheb(us3)' /usr/share/X11/xkb/symbols/us && grep -q 'labheb(il3)' /usr/share/X11/xkb/symbols/il && log "PASS XKB Hebrew on RightAlt" || log "FAIL XKB Hebrew on RightAlt"
 for u in unattended-upgrades apt-daily.timer apt-daily-upgrade.timer; do
   [[ $(systemctl is-enabled $u 2>/dev/null) == enabled ]] && log "FAIL $u still enabled" || log "PASS $u off"
 done
