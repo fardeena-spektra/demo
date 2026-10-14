@@ -6,7 +6,7 @@
 #  (3) Background updates off   (4) Firefox snap -> deb (faster)
 #  (5) Text size: default DPI 144, set on FIRST login only (student can change it)
 #  (6) Desktop shortcuts: MATLAB + Firefox
-#  (7) MATLAB first-run warm-up in background (faster first MATLAB start)
+#  (7) MATLAB: shared Service Host (no 2 GB per-user download) + first-run warm-up in background
 # Logs on VM: /var/log/lab-bootstrap.log   /var/log/matlab-warmup.log
 # No reboot, no logoff.
 # =====================================================================
@@ -308,6 +308,31 @@ else
 fi
 
 # ---------------------------------------------------------------------
+step "8b. MATLAB Service Host - shared admin install (no 2 GB per-user download at first MATLAB open)"
+# Official MathWorks method: github.com/mathworks-ref-arch/administer-mathworks-service-host
+MSH_ROOT=/usr/local/MathWorks/ServiceHost/
+if command -v matlab >/dev/null; then
+  if [[ -d $MSH_ROOT ]] && grep -q '^MATHWORKS_SERVICE_HOST_MANAGED_INSTALL_ROOT=' /etc/environment; then
+    log "Service Host already installed in $MSH_ROOT"
+  else
+    command -v git >/dev/null && command -v unzip >/dev/null || $APT install git unzip >/dev/null 2>&1
+    rm -rf /opt/msh-admin
+    if git clone -q --depth 1 https://github.com/mathworks-ref-arch/administer-mathworks-service-host.git /opt/msh-admin; then
+      T0=$(date +%s)
+      (cd /opt/msh-admin/admin-scripts/linux/admin-controlled-installation && ./install_msh.sh --destination "$MSH_ROOT" --update-environment >/var/log/msh-install.log 2>&1) \
+        && log "Service Host $(cat /opt/msh-admin/admin-scripts/linux/admin-controlled-installation/latest_release.txt) installed in $(( $(date +%s)-T0 )) s ($(du -sh $MSH_ROOT | cut -f1))" \
+        || log "ERROR: Service Host install failed (see /var/log/msh-install.log)"
+    else
+      log "WARN: cannot download MathWorks Service Host scripts - MATLAB first open will be slower"
+    fi
+  fi
+  echo "export MATHWORKS_SERVICE_HOST_MANAGED_INSTALL_ROOT=$MSH_ROOT" > /etc/profile.d/mathworks-msh.sh
+  rm -rf "$LHOME/.MathWorks/ServiceHost"
+else
+  log "MATLAB not installed - Service Host skipped"
+fi
+
+# ---------------------------------------------------------------------
 step "9. Apply settings to $LABUSER now (no GUI session needed)"
 RT=/run/user/$LUID
 [[ -d $RT ]] || { RT=/tmp/lab-rt-$LUID; mkdir -p "$RT"; chown "$LABUSER": "$RT"; chmod 700 "$RT"; }
@@ -394,6 +419,10 @@ for u in unattended-upgrades apt-daily.timer apt-daily-upgrade.timer; do
 done
 snap list firefox >/dev/null 2>&1 && log "INFO Firefox is snap" || { dpkg-query -W firefox >/dev/null 2>&1 && log "PASS Firefox deb $(dpkg-query -W -f='${Version}' firefox)"; }
 for s in matlab firefox; do [[ -f $DESK/$s.desktop ]] && log "PASS Desktop shortcut: $s" || log "FAIL Desktop shortcut: $s"; done
+if command -v matlab >/dev/null; then
+  [[ -d /usr/local/MathWorks/ServiceHost ]] && grep -q '^MATHWORKS_SERVICE_HOST_MANAGED_INSTALL_ROOT=' /etc/environment \
+    && log "PASS MATLAB Service Host shared install" || log "FAIL MATLAB Service Host shared install"
+fi
 echo "  IBus ($LABUSER): $(U gsettings get org.freedesktop.ibus.general preload-engines)"
 U xfconf-query -c xsettings -l -v 2>/dev/null | grep -E 'Xft/(HintStyle|Antialias|DPI|RGBA)' | sed 's/^/  /'
 echo "  Compositing  : $(U xfconf-query -c xfwm4 -p /general/use_compositing 2>/dev/null) (false = sharper/faster)"
