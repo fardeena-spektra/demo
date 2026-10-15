@@ -169,7 +169,39 @@ for l in open(f).read().splitlines():
 open(f, 'w').write("\n".join(out) + "\n"); print("  xrdp keymap: %d/27 Hebrew letters on RightAlt" % n)
 PY
 # (3) XKB: RightAlt + key = Hebrew letter in the English and Hebrew layouts
-X=/usr/share/X11/xkb/symbols
+#     Key type LABHEB: Ctrl + (RightAlt+key) gives the English letter, so Ctrl+C/V/A/Z/S work with a Hebrew host keyboard
+X=/usr/share/X11/xkb/symbols; XT=/usr/share/X11/xkb/types
+cat > $XT/labheb <<'XKB'
+partial default xkb_types "default" {
+    virtual_modifiers LevelThree;
+    type "LABHEB" {
+        modifiers = Shift + LevelThree + Control;
+        map[None] = Level1;
+        map[Shift] = Level2;
+        map[LevelThree] = Level3;
+        map[Shift+LevelThree] = Level4;
+        map[Control] = Level1;
+        map[Control+Shift] = Level2;
+        map[Control+LevelThree] = Level1;
+        map[Control+Shift+LevelThree] = Level2;
+        preserve[Control] = Control;
+        preserve[Control+Shift] = Control;
+        preserve[Control+LevelThree] = Control;
+        preserve[Control+Shift+LevelThree] = Control;
+        level_name[Level1] = "Base";
+        level_name[Level2] = "Shift";
+        level_name[Level3] = "Hebrew";
+        level_name[Level4] = "Hebrew Shift";
+    };
+};
+XKB
+if ! grep -q 'include "labheb"' $XT/complete; then
+  cp -a $XT/complete $XT/complete.orig.$TS
+  python3 - $XT/complete <<'PY'
+import sys; f=sys.argv[1]; s=open(f).read(); i=s.rindex('};')
+open(f,'w').write(s[:i]+'    include "labheb"\n'+s[i:])
+PY
+fi
 python3 - <<'PY'
 heb=[("AD03","05E7"),("AD04","05E8"),("AD05","05D0"),("AD06","05D8"),("AD07","05D5"),("AD08","05DF"),("AD09","05DD"),("AD10","05E4"),
      ("AC01","05E9"),("AC02","05D3"),("AC03","05D2"),("AC04","05DB"),("AC05","05E2"),("AC06","05D9"),("AC07","05D7"),("AC08","05DC"),
@@ -179,8 +211,7 @@ out=[]
 for name in ("us3","il3"):
     out.append('partial alphanumeric_keys\nxkb_symbols "%s" {\n    include "level3(ralt_switch)"' % name)
     for k,u in heb:
-        t = "FOUR_LEVEL" if (k in ("AC10","AB08","AB09") and name=="us3") else "FOUR_LEVEL_SEMIALPHABETIC"
-        out.append('    key <%s> { type[Group1]="%s", symbols[Group1]=[ NoSymbol, NoSymbol, U%s, U%s ] };' % (k,t,u,u))
+        out.append('    key <%s> { type[Group1]="LABHEB", symbols[Group1]=[ NoSymbol, NoSymbol, U%s, U%s ] };' % (k,u,u))
     out.append('};\n')
 open("/usr/share/X11/xkb/symbols/labheb","w").write("\n".join(out))
 PY
@@ -195,11 +226,12 @@ open(f,'w').write(s[:end]+'\n    include "%s"'%inc+s[end:])
 PY
 done
 printf 'xkb_keymap { xkb_keycodes {include "xfree86+aliases(qwerty)"}; xkb_types {include "complete"}; xkb_compat {include "complete"}; xkb_symbols {include "pc+us+il:2"}; xkb_geometry {include "pc(pc104)"}; };\n' > /tmp/labheb-test.xkb
-if xkbcomp -w0 -xkb /tmp/labheb-test.xkb /tmp/labheb-test.out 2>/dev/null && grep -q U05E9 /tmp/labheb-test.out; then
-  log "XKB layout: RightAlt+key = Hebrew (compiles OK)"
+if xkbcomp -w0 -xkb /tmp/labheb-test.xkb /tmp/labheb-test.out 2>/dev/null && grep -q U05E9 /tmp/labheb-test.out && grep -q LABHEB /tmp/labheb-test.out; then
+  log "XKB layout: RightAlt+key = Hebrew, Ctrl shortcuts = English letters (compiles OK)"
 else
   log "ERROR: XKB layout does not compile - restoring originals"
   for f in us il; do O=$(ls $X/$f.orig.* 2>/dev/null | head -1); [[ -n $O ]] && cp -a "$O" $X/$f; done
+  O=$(ls $XT/complete.orig.* 2>/dev/null | head -1); [[ -n $O ]] && cp -a "$O" $XT/complete; rm -f $XT/labheb
 fi
 rm -f /var/lib/xkb/*.xkm
 
